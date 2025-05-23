@@ -43,6 +43,12 @@ class KnowledgeBaseWebAPI:
             ["GET"],
             "搜索指定集合中的文档",
         )
+        self.astrbot_context.register_web_api(
+            "/alkaid/kb/collection/delete",
+            self.delete_collection,
+            ["GET"],
+            "删除指定集合",
+        )
         self.fp = FileParser()
 
     async def create_collection(self):
@@ -187,3 +193,23 @@ class KnowledgeBaseWebAPI:
         except Exception as e:
             logger.error(f"搜索失败: {str(e)}")
             return Response().error(f"搜索失败: {str(e)}").__dict__
+
+    async def delete_collection(self):
+        """
+        删除指定集合。
+        :param collection_name: 集合名称
+        """
+        # 从 URL 参数中获取查询参数
+        collection_name = request.args.get("collection_name")
+
+        # 检查知识库是否存在
+        if not await self.vec_db.collection_exists(collection_name):
+            return Response().error("目标知识库不存在").__dict__
+
+        try:
+            # 执行删除
+            await self.vec_db.delete_collection(collection_name)
+            return Response().ok(f"删除 {collection_name} 成功").__dict__
+        except Exception as e:
+            logger.error(f"删除失败: {str(e)}")
+            return Response().error(f"删除失败: {str(e)}").__dict__
