@@ -30,7 +30,7 @@ class FaissStore(VectorDBBase):
 
     def _load_collection(self, collection_name: str):
         index_path = os.path.join(self.data_path, f"{collection_name}.index")
-        storage_path = os.path.join(self.data_path, f"{collection_name}.docs")
+        storage_path = os.path.join(self.data_path, f"{collection_name}.db")
 
         if os.path.exists(index_path) and os.path.exists(storage_path):
             try:
@@ -57,7 +57,7 @@ class FaissStore(VectorDBBase):
     def _save_collection(self, collection_name: str):
         if collection_name in self.indexes and collection_name in self.doc_storages:
             index_path = os.path.join(self.data_path, f"{collection_name}.index")
-            storage_path = os.path.join(self.data_path, f"{collection_name}.docs")
+            storage_path = os.path.join(self.data_path, f"{collection_name}.db")
             try:
                 faiss.write_index(self.indexes[collection_name], index_path)
                 with open(storage_path, "wb") as f:
@@ -313,7 +313,7 @@ class FaissStore(VectorDBBase):
             del self.doc_storages[collection_name]
 
             index_path = os.path.join(self.data_path, f"{collection_name}.index")
-            storage_path = os.path.join(self.data_path, f"{collection_name}.docs")
+            storage_path = os.path.join(self.data_path, f"{collection_name}.db")
 
             try:
                 if os.path.exists(index_path):
