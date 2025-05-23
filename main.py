@@ -23,6 +23,7 @@ from .vector_store.base import VectorDBBase, Document
 from .vector_store.faiss_store import FaissStore
 from .vector_store.milvus_lite_store import MilvusLiteStore
 from .vector_store.milvus_store import MilvusStore
+from .web_api import KnowledgeBaseWebAPI
 
 
 PLUGIN_REGISTER_NAME = "astrbot_plugin_knowledge_base"
@@ -60,6 +61,13 @@ class KnowledgeBasePlugin(Star):
             self.persistent_data_root_path, "user_collection_prefs.json"
         )
         self.user_collection_preferences: Dict[str, str] = {}
+
+        try:
+            self.web_api = KnowledgeBaseWebAPI(
+                self.vector_db, self.text_splitter, self.context
+            )
+        except Exception:
+            logger.warning("知识库 WebAPI 初始化失败，可能导致无法在 WebUI 操作知识库。", exc_info=True)
 
         self.init_task = asyncio.create_task(self._initialize_components())
 
@@ -145,6 +153,11 @@ class KnowledgeBasePlugin(Star):
                 logger.info(f"向量数据库 '{db_type}' 初始化完成。")
 
             await self._load_user_preferences()
+
+            # 更新 Web API 的向量数据库引用
+            self.web_api.vec_db = self.vector_db
+            self.web_api.text_splitter = self.text_splitter
+
             logger.info("知识库插件初始化成功。")
 
         except Exception as e:
