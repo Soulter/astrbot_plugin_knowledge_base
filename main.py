@@ -19,7 +19,7 @@ from .core import constants
 from .utils.installation import ensure_vector_db_dependencies
 from .utils.embedding import EmbeddingUtil
 from .utils.text_splitter import TextSplitterUtil
-from .utils.file_parser import FileParser
+from .utils.file_parser import FileParser, LLM_Config
 from .vector_store.base import VectorDBBase
 if VERSION < "3.5.12":
     logger.info("建议升级至 AstrBot v3.5.12 或更高版本。")
@@ -72,7 +72,6 @@ class KnowledgeBasePlugin(Star):
             self.persistent_data_root_path, "user_collection_prefs.json"
         )
 
-
     async def _initialize_components(self):
         try:
             logger.info("知识库插件开始初始化...")
@@ -109,7 +108,11 @@ class KnowledgeBasePlugin(Star):
             logger.info("文本分割工具初始化完成。")
 
             # File Parser
-            self.file_parser = FileParser(context=self.context)
+            self.llm_config = LLM_Config(
+                context=self.context,
+                status=self.config.get("LLM_model")
+            )
+            self.file_parser = FileParser(self.llm_config)
             logger.info("文件解析器初始化完成。")
 
             # Vector DB
