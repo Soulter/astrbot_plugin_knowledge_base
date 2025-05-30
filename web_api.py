@@ -5,7 +5,7 @@ from quart import request
 from astrbot.dashboard.server import Response
 from .utils.text_splitter import TextSplitterUtil
 from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-from .utils.file_parser import FileParser
+from .utils.file_parser import FileParser, LLM_Config
 from astrbot import logger
 from astrbot.core.config.default import VERSION
 
@@ -16,6 +16,7 @@ class KnowledgeBaseWebAPI:
         vec_db: VectorDBBase,
         text_splitter: TextSplitterUtil,
         astrbot_context: Context,
+        llm_config: LLM_Config,
     ):
         self.vec_db = vec_db
         self.text_splitter = text_splitter
@@ -54,7 +55,7 @@ class KnowledgeBaseWebAPI:
             ["GET"],
             "删除指定集合",
         )
-        self.fp = FileParser(context=astrbot_context)
+        self.fp = FileParser(llm_config=llm_config)
 
     async def create_collection(self):
         """

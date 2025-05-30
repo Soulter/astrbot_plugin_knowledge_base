@@ -159,7 +159,7 @@ class KnowledgeBasePlugin(Star):
             # Web API
             try:
                 self.web_api = KnowledgeBaseWebAPI(
-                    self.vector_db, self.text_splitter, self.context
+                    self.vector_db, self.text_splitter, self.context, self.llm_config
                 )
             except Exception as e:
                 logger.warning(f"知识库 WebAPI 初始化失败，可能导致无法在 WebUI 操作知识库。原因：{e}", exc_info=True)
