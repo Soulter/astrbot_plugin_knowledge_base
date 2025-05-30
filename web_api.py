@@ -54,7 +54,7 @@ class KnowledgeBaseWebAPI:
             ["GET"],
             "删除指定集合",
         )
-        self.fp = FileParser()
+        self.fp = FileParser(context=astrbot_context)
 
     async def create_collection(self):
         """
@@ -153,6 +153,8 @@ class KnowledgeBaseWebAPI:
         finally:
             if os.path.exists(path):
                 os.remove(path)
+            return Response().error(f"添加文档失败").__dict__
+
 
     async def search_documents(self):
         """

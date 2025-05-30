@@ -33,7 +33,12 @@ class AstrBotEmbeddingProviderWrapper(EmbeddingProvider):
         self.dimension = dimension
 
     async def get_embedding(self, text: str) -> List[float]:
-        return await self.embedding_util.get_embedding_async(text)
+        vec = await self.embedding_util.get_embedding_async(text)
+        if not vec:
+            raise ValueError(
+                "获取向量失败，返回的向量为空或无效。请检查输入文本和配置。"
+            )
+        return vec
 
     def get_dim(self) -> int:
         return self.dimension
@@ -101,12 +106,39 @@ class FaissStore(VectorDBBase):
             embedding_provider=self.embedding_util,
         )
         await self.vecdbs[collection_name].initialize()
+        await self.vecdbs[collection_name].embedding_storage.save_index()
         logger.info(f"Faiss 集合 '{collection_name}' 创建成功。")
 
     async def collection_exists(self, collection_name: str) -> bool:
         return (
             collection_name in self.vecdbs or collection_name in self._old_collections
         )
+    
+    async def _batch_process_task(self, batch: ProcessingBatch, collection_name: str) -> List[str]:
+        """处理单个批次的任务"""
+        all_doc_ids = []
+        retry_cnt = 3
+        for doc in batch.documents:
+            while retry_cnt > 0:
+                try:
+                    id = await self.vecdbs[collection_name].insert(
+                        content=doc.text_content,
+                        metadata=doc.metadata,
+                    )
+                    all_doc_ids.append(id)
+                    break
+                except Exception as e:
+                    logger.error(
+                        f"向 Faiss 集合 '{collection_name}' 添加文档时发生异常: {e}", stack_info=True
+                    )
+                    retry_cnt -= 1
+                    if retry_cnt == 0:
+                        excerpt = doc.text_content[:100].replace("\n", "")
+                        logger.error(
+                            f"批次添加失败，文档 {excerpt}... 将被丢弃。"
+                        )
+                    await asyncio.sleep(1)
+        return all_doc_ids
 
     async def add_documents(
         self, collection_name: str, documents: List[Document]
@@ -120,89 +152,35 @@ class FaissStore(VectorDBBase):
 
         all_doc_ids: List[str] = []
 
-        # 创建一个异步队列来存放待处理的批次
-        processing_queue: asyncio.Queue[ProcessingBatch] = asyncio.Queue()
-
-        # 将所有文档按批次放入队列
         num_batches = 0
+        tasks = []
+        failed_batches_cnt = 0
         for i in range(0, len(documents), DEFAULT_BATCH_SIZE):
             batch_docs = documents[i : i + DEFAULT_BATCH_SIZE]
-            await processing_queue.put(ProcessingBatch(documents=batch_docs))
+            processing_batch = ProcessingBatch(documents=batch_docs)
+            tasks.append(
+                self._batch_process_task(processing_batch, collection_name)
+            )
             num_batches += 1
-        logger.info(f"已将 {len(documents)} 份文档分成 {num_batches} 个批次放入队列。")
+        logger.info(
+            f"向 Faiss 集合 '{collection_name}' 添加 {len(documents)} 个文档，共分为 {num_batches} 个批次进行处理。"
+        )
 
-        # 从队列中取出批次进行处理
-        processed_batches_count = 0
-        failed_batches_discarded_count = 0
-
-        while processed_batches_count < num_batches + failed_batches_discarded_count:
-            # 尝试从队列获取一个批次，如果队列为空，则等待
-            # 这里需要一个机制来判断所有初始批次是否都已处理完毕，
-            # 否则可能会无限等待。对于单个消费者，最简单的是在所有任务完成后使用join。
-            # 或者，如果队列为空且没有新的生产者，可以直接退出循环。
-            try:
-                # 设置超时，避免死锁
-                processing_batch = await asyncio.wait_for(
-                    processing_queue.get(), timeout=1.0
-                )
-            except asyncio.TimeoutError:
-                # 如果队列为空且等待超时，表示所有初始批次可能已经处理完毕或者卡住了
-                if processing_queue.empty():
-                    break
-                else:
+        try:
+            results = await asyncio.gather(*tasks)
+            for batch_result in results:
+                if not batch_result:
+                    failed_batches_cnt += 1
                     continue
-
-            current_docs_in_batch = processing_batch.documents
-            current_retry_count = processing_batch.retry_count
-
-            log_prefix = f"[批次 ({len(current_docs_in_batch)} docs), 重试 {current_retry_count}/{MAX_RETRIES}]"
-            logger.info(f"{log_prefix} 正在处理...")
-
-            try:
-                batch_added_ids = []
-                for doc in current_docs_in_batch:
-                    id = await self.vecdbs[collection_name].insert(
-                        content=doc.text_content,
-                        metadata=doc.metadata,
-                    )
-                    batch_added_ids.append(id)
-                all_doc_ids.extend(batch_added_ids)
-                logger.info(f"{log_prefix} 成功添加了 {len(batch_added_ids)} 个文档。")
-
-                processed_batches_count += 1
-                processing_queue.task_done()  # 标记此任务已完成
-
-            except Exception as e:
-                logger.error(f"{log_prefix} 处理失败: {e}")
-
-                if current_retry_count < MAX_RETRIES:
-                    processing_batch.retry_count += 1
-                    # 将批次重新放回队列尾部
-                    await processing_queue.put(processing_batch)
-                    logger.warning(
-                        f"{log_prefix} 将批次重新放入队列进行重试 (当前重试次数: {processing_batch.retry_count})。"
-                    )
-                else:
-                    logger.error(
-                        f"{log_prefix} 批次达到最大重试次数 ({MAX_RETRIES})，将丢弃此批次。"
-                    )
-                    failed_batches_discarded_count += 1
-
-                processed_batches_count += 1  # 无论成功或失败，原始批次都被“处理”了一次
-                processing_queue.task_done()  # 标记此任务已完成 (无论是重试还是丢弃)
-
-            finally:
-                # 显式清理本批次可能占用的内存
-                del current_docs_in_batch  # 清理当前批次文档的引用
-                del processing_batch  # 清理批次对象的引用
-
-        # 等待所有任务完成（尽管上面的循环在单消费者模式下已经做到了类似的事情）
-        await processing_queue.join()  # 如果有多个消费者协程，这个是必要的
+                all_doc_ids.extend(batch_result)
+        except Exception as e:
+            logger.error(f"处理批次时发生异常: {e}")
+            return []
 
         logger.info(
             f"向 Faiss 集合 '{collection_name}' 完成添加操作。总共处理了 {len(documents)} 个原始文档，成功添加 {len(all_doc_ids)} 个文档。"
         )
-        logger.info(f"其中 {failed_batches_discarded_count} 个批次因重试失败被丢弃。")
+        logger.info(f"其中 {failed_batches_cnt} 个批次因重试失败被丢弃。")
         return all_doc_ids
 
     async def search(
