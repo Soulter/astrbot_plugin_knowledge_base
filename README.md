@@ -5,13 +5,21 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/lxfight/astrbot_plugin_knowledge_base/refs/heads/master/knowledge_baselogo.png" alt="LumineStory Banner" width="100%" style="border-radius: 8px;" />
+  <img src="https://media.githubusercontent.com/media/lxfight/astrbot_plugin_knowledge_base/refs/heads/master/knowledge_baselogo.png" alt="LumineStory Banner" width="100%" style="border-radius: 8px;" />
 </p>
 
 <code>astrbot_plugin_knowledge_base</code> 是一个为 <a href="https://github.com/Soulter/AstrBot">AstrBot</a> 聊天机器人框架量身定制的强大知识库插件。
 它允许您的机器人连接到自定义的知识源，通过先进的检索增强生成 (RAG) 技术，
 让机器人能够基于准确、具体的私有信息进行对话，而不仅仅依赖预训练模型的通用知识。
 </p>
+
+---
+
+⚠️ **重要通知：v1.0 版本重构进行中** ⚠️
+> 大家好，本项目正在进行一次大规模的底层重构，目标是发布一个更稳定、更灵活、更易于扩展的 v1.0 版本。
+> 在重构期间，我将尽最大努力保证对现有功能的兼容性，并提供清晰的迁移指南，力求让大家能够丝滑过渡到新版本。
+> 因此，master 主分支近期将暂停常规更新。所有最新的开发工作将集中在 refactor 分支进行。
+> 感谢大家的理解与支持！
 
 ---
 
