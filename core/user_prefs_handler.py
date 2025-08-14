@@ -52,8 +52,7 @@ class UserPrefsHandler:
 
     def get_user_default_collection(self, event: AstrMessageEvent) -> str:
         user_key = event.unified_msg_origin
-        user_kb_perf = self.user_collection_preferences.get(user_key, None)
-        if user_kb_perf:
+        if user_kb_perf := self.user_collection_preferences.get(user_key, None):
             # 用户会话偏好优先
             return user_kb_perf
         if VERSION >= "4.0.0":
