@@ -67,6 +67,17 @@ class KnowledgeBaseWebAPI:
         )
         self.fp = FileParser(llm_config=llm_config)
 
+    async def test_embedding_provider(self, collection_name: str):
+        res = await self.vec_db.embedding_util.get_embedding_async(
+            text="test", collection_name=collection_name
+        )
+        real_dim = len(res)
+        dim = self.vec_db.embedding_util.get_dimensions(collection_name=collection_name)
+        if real_dim != dim:
+            raise ValueError(
+                f"嵌入模型提供商配置中的嵌入维度有误，填写为 {dim}，实际为 {real_dim}，请前往修改。"
+            )
+
     async def create_collection(self):
         """
         创建一个新的知识库集合。
@@ -106,6 +117,19 @@ class KnowledgeBaseWebAPI:
             ] = collection_metadata
             await self.user_prefs_handler.save_user_preferences()
             # 兼容性问题，create_collection 方法放在上一步之后执行。
+
+            # test provider dim
+            try:
+                await self.test_embedding_provider(collection_name)
+            except Exception as e:
+                # delete
+                collection_metadata.pop(collection_name, None)
+                self.user_prefs_handler.user_collection_preferences[
+                    "collection_metadata"
+                ] = collection_metadata
+                await self.user_prefs_handler.save_user_preferences()
+                return Response().error(str(e)).__dict__
+
             await self.vec_db.create_collection(collection_name)
             return Response().ok("集合创建成功").__dict__
         except Exception as e:
